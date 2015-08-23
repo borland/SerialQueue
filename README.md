@@ -30,7 +30,7 @@ Serial queues offer a very interesting option in the "middle" of these two space
  - They are very lightweight (each queue is literally not much more than a List and a few lock objects), so you can easily have thousands of them
  - They have a usage model which is similar to threads and is easier to reason about
 
- # Example
+# Example
 
     var q = new SerialQueue();
     q.DispatchAsync(() => {
