@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.23107.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SerialQueue", "SerialQueue\SerialQueue.csproj", "{E470B429-5B84-4F4D-B8D3-19957F787F8E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SerialQueue.Test", "SerialQueue.Test\SerialQueue.Test.csproj", "{81E84236-8277-4E69-A97D-564FD64C459D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{4A3251BF-17F6-4DA5-9E70-E610F68F3676}"
+	ProjectSection(SolutionItems) = preProject
+		LICENSE = LICENSE
+		README.md = README.md
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E470B429-5B84-4F4D-B8D3-19957F787F8E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E470B429-5B84-4F4D-B8D3-19957F787F8E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E470B429-5B84-4F4D-B8D3-19957F787F8E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E470B429-5B84-4F4D-B8D3-19957F787F8E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{81E84236-8277-4E69-A97D-564FD64C459D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{81E84236-8277-4E69-A97D-564FD64C459D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{81E84236-8277-4E69-A97D-564FD64C459D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{81E84236-8277-4E69-A97D-564FD64C459D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
