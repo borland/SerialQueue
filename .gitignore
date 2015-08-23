@@ -9,6 +9,9 @@
 packages/
 TestResults/
 
+#visual studio junk
+.vs
+
 #nuget
 project.lock.json
 
