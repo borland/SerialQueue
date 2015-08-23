@@ -47,7 +47,7 @@ namespace Dispatch
 
     /// <summary>Queues can implement this interface to enable the VerifyQueue extension method which
     /// throws an exception if your code is not on the correct queue</summary>
-    public interface IDispatchQueueV
+    public interface IDispatchQueueV : IDispatchQueue
     {
         /// <summary>Checks whether the currently-executing function is
         /// on this queue, and throw an OperationInvalidException if it is not</summary>
