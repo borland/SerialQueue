@@ -43,17 +43,12 @@ namespace Dispatch
         /// Implementations reserve the right to run the action on a different thread (e.g WPF Dispatcher)</summary>
         /// <param name="action">The function to run.</param>
         void DispatchSync(Action action);
-    }
 
-    /// <summary>Queues can implement this interface to enable the VerifyQueue extension method which
-    /// throws an exception if your code is not on the correct queue</summary>
-    public interface IDispatchQueueV
-    {
         /// <summary>Checks whether the currently-executing function is
         /// on this queue, and throw an OperationInvalidException if it is not</summary>
         void VerifyQueue();
     }
-
+    
     /// <summary>A serial queue needs a threadpool to run tasks on. You can provide your own implementation if you want to have a custom threadpool with it's own limits (e.g. no more than X concurrent threads)</summary>
     public interface IThreadPool
     {

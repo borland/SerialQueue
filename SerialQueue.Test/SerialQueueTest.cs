@@ -52,6 +52,44 @@ namespace Dispatch.SerialQueueTest
             });
             CollectionAssert.AreEqual(new[] { 1, 2, 3 }, hit);
         }
+
+        [TestMethod]
+        public void NestedDispatchSyncInsideDispatchAsyncDoesntDeadlock()
+        {
+            var q = new SerialQueue(new TaskThreadPool());
+            var hit = new List<int>();
+            var mre = new ManualResetEvent(false);
+            q.DispatchAsync(() => {
+                hit.Add(1);
+                q.DispatchSync(() => {
+                    hit.Add(2);
+                });
+                hit.Add(3);
+                mre.Set();
+            });
+            mre.WaitOne();
+            CollectionAssert.AreEqual(new[] { 1, 2, 3 }, hit);
+        }
+
+        [TestMethod]
+        public void DispatchSyncConcurrentWithAnotherDispatchAsyncWorksProperly()
+        {
+            var q = new SerialQueue(new TaskThreadPool());
+            var hit = new List<int>();
+            var are = new AutoResetEvent(false);
+            q.DispatchAsync(() => {
+                hit.Add(1);
+                are.Set();
+                Thread.Sleep(100); // we can't block on an event as that would deadlock, we just have to slow it down enough to force the DispatchSync to wait
+                hit.Add(2);
+            });
+            are.WaitOne();
+            q.DispatchSync(() => {
+                hit.Add(3);
+            });
+
+            CollectionAssert.AreEqual(new[] { 1, 2, 3 }, hit);
+        }
     }
 
     [TestClass]

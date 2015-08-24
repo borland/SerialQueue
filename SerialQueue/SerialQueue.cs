@@ -28,6 +28,16 @@ namespace Dispatch
     /// <summary>Implements a serial queue</summary>
     public class SerialQueue : IDispatchQueue
     {
+        enum AsyncState
+        {
+            Idle = 0,
+            Scheduled,
+            Processing
+        }
+
+        [ThreadStatic]
+        static Stack<IDispatchQueue> s_queueStack;
+
         readonly IThreadPool m_threadPool;
 
         // lock-order: We must never hold both these locks concurrently
@@ -36,7 +46,7 @@ namespace Dispatch
 
         readonly List<Action> m_asyncActions = new List<Action>(); // aqcuire m_schedulerLock 
         readonly HashSet<IDisposable> m_timers = new HashSet<IDisposable>(); // acquire m_schedulerLock
-        volatile bool m_asyncActionsAreProcessing = false; // acquire m_schedulerLock
+        volatile AsyncState m_asyncState = AsyncState.Idle; // acquire m_schedulerLock
         bool m_isDisposed = false; // acquire m_schedulerLock
 
         /// <summary>Constructs a new SerialQueue backed by the given ThreadPool</summary>
@@ -56,6 +66,14 @@ namespace Dispatch
         /// <summary>This event is raised whenever an asynchronous function (via DispatchAsync or DispatchAfter) 
         /// throws an unhandled exception</summary>
         public event EventHandler<UnhandledExceptionEventArgs> UnhandledException;
+
+        /// <summary>Checks whether the currently-executing function is
+        /// on this queue, and throw an OperationInvalidException if it is not</summary>
+        public void VerifyQueue()
+        {
+            if (s_queueStack == null || !s_queueStack.Contains(this))
+                throw new InvalidOperationException("On the wrong queue");
+        }
 
         /// <summary>Schedules the given action to run asynchronously on the queue after dueTime.</summary>
         /// <remarks>The function is not guaranteed to run at dueTime as the queue may be busy, it will run when next able.</remarks>
@@ -116,11 +134,11 @@ namespace Dispatch
                     throw new ObjectDisposedException("SerialQueue", "Cannot call DispatchSync on a disposed queue");
 
                 m_asyncActions.Add(action);
-                if (!m_asyncActionsAreProcessing)
+                if (m_asyncState == AsyncState.Idle)
                 {
                     // even though we don't hold m_schedulerLock when asyncActionsAreProcessing is set to false
                     // that should be OK as the only "contention" happens up here while we do hold it
-                    m_asyncActionsAreProcessing = true;
+                    m_asyncState = AsyncState.Scheduled;
                     m_threadPool.QueueWorkItem(ProcessAsync);
                 }
             }
@@ -136,11 +154,16 @@ namespace Dispatch
         protected virtual void ProcessAsync()
         {
             bool schedulerLockTaken = false;
+            if (s_queueStack == null)
+                s_queueStack = new Stack<IDispatchQueue>();
+            s_queueStack.Push(this);
             try
             {
                 Monitor.Enter(m_schedulerLock, ref schedulerLockTaken);
                 Debug.Assert(schedulerLockTaken);
 
+                m_asyncState = AsyncState.Processing;
+                
                 if (m_isDisposed)
                     return; // the actions will have been dumped, there's no point doing anything
                 
@@ -173,9 +196,11 @@ namespace Dispatch
             }
             finally
             {
-                m_asyncActionsAreProcessing = false;
+                m_asyncState = AsyncState.Idle;
                 if (schedulerLockTaken)
                     Monitor.Exit(m_schedulerLock);
+
+                s_queueStack.Pop(); // technically we leak the queue stack threadlocal, but it's probably OK. Windows will free it when the thread exits
             }
         }
 
@@ -185,6 +210,11 @@ namespace Dispatch
         /// <param name="action">The function to run.</param>
         public virtual void DispatchSync(Action action)
         {
+            if (s_queueStack == null)
+                s_queueStack = new Stack<IDispatchQueue>(); 
+            var prevStack = s_queueStack.ToArray(); // there might be a more optimal way of doing this, it seems to be fast enough
+            s_queueStack.Push(this);
+
             bool schedulerLockTaken = false;
             try
             {
@@ -194,41 +224,44 @@ namespace Dispatch
                 if (m_isDisposed)
                     throw new ObjectDisposedException("SerialQueue", "Cannot call DispatchSync on a disposed queue");
 
-                if (!m_asyncActionsAreProcessing) // if there is any async stuff happening we must wait for it
+                if(m_asyncState == AsyncState.Idle || prevStack.Contains(this)) // either queue is empty or it's a nested call
                 {
                     Monitor.Exit(m_schedulerLock);
                     schedulerLockTaken = false;
 
                     // process the action
                     lock (m_executionLock)
-                        action(); // DO NOT CATCH EXCEPTIONS. We're excuting synchronously so just let it throw
+                        action(); // DO NOT CATCH EXCEPTIONS. We're excuting synchronously so just let it throw 
+                    return;
                 }
-                else
-                { // the queue is busy, we need to acquire the execution lock
-                    var asyncReady = new ManualResetEvent(false);
-                    var syncDone = new ManualResetEvent(false);
-                    DispatchAsync(() => {
-                        asyncReady.Set();
-                        syncDone.WaitOne();
-                    });
-                    Monitor.Exit(m_schedulerLock);
-                    schedulerLockTaken = false;
+                
+                // if there is any async stuff scheduled we must also schedule
+                // else m_asyncState == AsyncState.Scheduled, OR we fell through from Processing
+                var asyncReady = new ManualResetEvent(false);
+                var syncDone = new ManualResetEvent(false);
+                DispatchAsync(() => {
+                    asyncReady.Set();
+                    syncDone.WaitOne();
+                });
+                Monitor.Exit(m_schedulerLock);
+                schedulerLockTaken = false;
 
-                    try
-                    {
-                        asyncReady.WaitOne();
-                        action(); // DO NOT CATCH EXCEPTIONS. We're excuting synchronously so just let it throw
-                    }
-                    finally
-                    {
-                        syncDone.Set(); // tell the dispatchAsync it can release the lock
-                    }
+                try
+                {
+                    asyncReady.WaitOne();
+                    action(); // DO NOT CATCH EXCEPTIONS. We're excuting synchronously so just let it throw
+                }
+                finally
+                {
+                    syncDone.Set(); // tell the dispatchAsync it can release the lock
                 }
             }
             finally
-            { // should never get here but inc ase we have some unepxectd throw
+            {
                 if (schedulerLockTaken)
                     Monitor.Exit(m_schedulerLock);
+
+                s_queueStack.Pop(); // technically we leak the queue stack threadlocal, but it's probably OK. Windows will free it when the thread exits
             }
         }
 
