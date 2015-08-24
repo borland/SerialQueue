@@ -63,4 +63,19 @@ namespace Dispatch
         IDisposable Schedule(TimeSpan dueTime, Action action);
     }
 
+    /// <summary>Useful extension methods for queues</summary>
+    public static class IDispatchQueueExtensions
+    {
+        /// <summary>A wrapper over DispatchSync that calls a value-producing function and returns it's result</summary>
+        /// <typeparam name="T">Result type</typeparam>
+        /// <param name="queue">The queue to execute the function on</param>
+        /// <param name="func">The function to execute</param>
+        /// <returns>The return value of func</returns>
+        public static T DispatchSync<T>(this IDispatchQueue queue, Func<T> func)
+        {
+            T result = default(T);
+            queue.DispatchSync(() => { result = func(); });
+            return result;
+        }
+    }
 }
