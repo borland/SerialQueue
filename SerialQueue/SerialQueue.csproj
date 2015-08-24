@@ -40,7 +40,6 @@
     <Compile Include="Interfaces.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SerialQueue.cs" />
-    <Compile Include="SerialQueueV.cs" />
     <Compile Include="TaskThreadPoolImpl.cs" />
     <Compile Include="UnhandledExceptionEventArgs.cs" />
   </ItemGroup>
