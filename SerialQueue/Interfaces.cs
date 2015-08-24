@@ -43,7 +43,7 @@ namespace Dispatch
         /// Implementations reserve the right to run the action on a different thread (e.g WPF Dispatcher)</summary>
         /// <param name="action">The function to run.</param>
         void DispatchSync(Action action);
-
+        
         /// <summary>Checks whether the currently-executing function is
         /// on this queue, and throw an OperationInvalidException if it is not</summary>
         void VerifyQueue();
