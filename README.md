@@ -36,7 +36,7 @@ Serial queues offer a very interesting option in the "middle" of these two space
     q.DispatchAsync(() => {
         Console.WriteLine("a");
     });
-    q.DispatchAsync(() = {
+    q.DispatchAsync(() => {
         Console.WriteLine("b");
     });
 
