@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 using System;
+using System.Threading.Tasks;
 
 namespace Dispatch
 {
@@ -76,6 +77,27 @@ namespace Dispatch
             T result = default(T);
             queue.DispatchSync(() => { result = func(); });
             return result;
+        }
+
+        /// <summary>A wrapper over DispatchAsync that calls a value-producing function on the queue and returns it's result via a Task</summary>
+        /// <remarks>Note: the task "completes" on the dispatch queue, so if you use ConfigureAwait(false) or
+        /// TaskContinuationOptions.ExecuteSychronously, you will still be running on the dispatch queue</remarks>
+        /// <typeparam name="T">Result type</typeparam>
+        /// <param name="queue">The queue to execute the function on</param>
+        /// <param name="func">The function to execute</param>
+        /// <returns>A task wrapping the return value (or exception) the func produced.</returns>
+        public static Task<T> DispatchAsync<T>(this IDispatchQueue queue, Func<T> func)
+        {
+            var tcs = new TaskCompletionSource<T>();
+            queue.DispatchAsync(() => {
+                try {
+                    tcs.SetResult(func());
+                }
+                catch (Exception e) {
+                    tcs.TrySetException(e);
+                }
+            });
+            return tcs.Task;
         }
     }
 }
