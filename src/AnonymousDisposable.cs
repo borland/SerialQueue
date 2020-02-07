@@ -21,28 +21,22 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 
+#nullable enable
+
 namespace Dispatch
 {
     /// <summary>An object which wraps a lambda function and calls it when disposed</summary>
     public sealed class AnonymousDisposable : IDisposable
     {
-        Action m_action;
+        Action? m_action;
 
         /// <summary>Constructor</summary>
         /// <param name="action">The action to run on dispose</param>
-        public AnonymousDisposable(Action action)
-        {
-            Debug.Assert(action != null, "action must not be null");
-            m_action = action;
-        }
+        public AnonymousDisposable(Action action) => m_action = action;
 
         /// <summary>Runs the given action. 
         /// If Dispose is called multiple times, it will only run the action the first time and silently do nothing thereafter</summary>
         public void Dispose()
-        {
-            var handler = Interlocked.Exchange(ref m_action, null);  // only call once
-            if (handler != null)
-                handler();
-        }
+            => Interlocked.Exchange(ref m_action, null)?.Invoke();
     }
 }

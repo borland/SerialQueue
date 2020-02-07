@@ -19,19 +19,19 @@
 // THE SOFTWARE.
 using System;
 
+#nullable enable
+
 namespace Dispatch
 {
     /// <summary>Used by the serial queue to communicate unhandled errors on async functions</summary>
     public class UnhandledExceptionEventArgs : EventArgs
     {
-        readonly Exception m_exception;
-        
+
         /// <summary>Constructor</summary>
         /// <param name="exception">The exception</param>
-        public UnhandledExceptionEventArgs(Exception exception)
-        { m_exception = exception; }
+        public UnhandledExceptionEventArgs(Exception exception) => Exception = exception;
 
         /// <summary>The exception</summary>
-        public Exception Exception { get { return m_exception; } }
+        public Exception Exception { get; }
     }
 }

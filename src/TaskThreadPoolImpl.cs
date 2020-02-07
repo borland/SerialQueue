@@ -21,26 +21,24 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
+#nullable enable
+
 namespace Dispatch
 {
     /// <summary>Implementation of IThreadPool which uses Task.Run to schedule async actions</summary>
     public class TaskThreadPool : IThreadPool
     {
-        static TaskThreadPool s_default = new TaskThreadPool();
-
         /// <summary>A default singleton instance of TaskThreadPool</summary>
-        public static TaskThreadPool Default { get { return s_default; } }
+        public static TaskThreadPool Default { get; } = new TaskThreadPool();
 
         /// <summary>Calls Task.Run to schedule the action into the threadpool</summary>
         /// <param name="action">Function to run</param>
-        public void QueueWorkItem(Action action)
-        { Task.Run(action); }
+        public void QueueWorkItem(Action action) => Task.Run(action);
 
         /// <summary>Creates a new System.Threading.Timer</summary>
         /// <param name="dueTime">When the timer will fire</param>
         /// <param name="action">Function to run when the timer fires</param>
         /// <returns>The timer</returns>
-        public IDisposable Schedule(TimeSpan dueTime, Action action)
-        { return new Timer(_ => action(), null, dueTime, TimeSpan.FromMilliseconds(-1)); }
+        public IDisposable Schedule(TimeSpan dueTime, Action action) => new Timer(_ => action(), null, dueTime, TimeSpan.FromMilliseconds(-1));
     }
 }

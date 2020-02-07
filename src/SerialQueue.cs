@@ -17,11 +17,14 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+
+#nullable enable
 
 namespace Dispatch
 {
@@ -35,8 +38,9 @@ namespace Dispatch
             Processing
         }
 
-        [ThreadStatic]
-        static Stack<IDispatchQueue> s_queueStack;
+        static readonly ThreadLocal<Stack<IDispatchQueue>> s_queueStack = new ThreadLocal<Stack<IDispatchQueue>>(
+            valueFactory: () => new Stack<IDispatchQueue>(), 
+            trackAllValues: false);
 
         readonly IThreadPool m_threadPool;
 
@@ -53,25 +57,21 @@ namespace Dispatch
         /// <param name="threadpool">The threadpool to queue async actions to</param>
         public SerialQueue(IThreadPool threadpool)
         {
-            if (threadpool == null)
-                throw new ArgumentNullException("threadpool");
-            
-            m_threadPool = threadpool;
+            m_threadPool = threadpool ?? throw new ArgumentNullException(nameof(threadpool));
         }
 
         /// <summary>Constructs a new SerialQueue backed by the default TaskThreadPool</summary>
-        public SerialQueue() : this(TaskThreadPool.Default)
-        { }
+        public SerialQueue() : this(TaskThreadPool.Default) { }
 
         /// <summary>This event is raised whenever an asynchronous function (via DispatchAsync or DispatchAfter) 
         /// throws an unhandled exception</summary>
-        public event EventHandler<UnhandledExceptionEventArgs> UnhandledException;
+        public event EventHandler<UnhandledExceptionEventArgs>? UnhandledException;
 
         /// <summary>Checks whether the currently-executing function is
         /// on this queue, and throw an OperationInvalidException if it is not</summary>
         public void VerifyQueue()
         {
-            if (s_queueStack == null || !s_queueStack.Contains(this))
+            if (s_queueStack == null || !s_queueStack.Value.Contains(this))
                 throw new InvalidOperationException("On the wrong queue");
         }
 
@@ -83,18 +83,18 @@ namespace Dispatch
         /// It is always safe to dispose this token, even if the async action has already run</returns>
         public virtual IDisposable DispatchAfter(TimeSpan dueTime, Action action)
         {
-            IDisposable cancel = null;
-            IDisposable timer = null;
+            IDisposable? cancel = null;
+            IDisposable? timer = null;
 
             lock (m_schedulerLock)
             {
                 if (m_isDisposed)
-                    throw new ObjectDisposedException("SerialQueue", "Cannot call DispatchAfter on a disposed queue");
+                    throw new ObjectDisposedException(nameof(SerialQueue), "Cannot call DispatchAfter on a disposed queue");
 
                 timer = m_threadPool.Schedule(dueTime, () => {
                     lock(m_schedulerLock)
                     {
-                        m_timers.Remove(timer);
+                        m_timers.Remove(timer!);
                         if (cancel == null || m_isDisposed) // we've been canceled OR the queue has been disposed
                             return;
 
@@ -131,9 +131,10 @@ namespace Dispatch
             lock (m_schedulerLock)
             {
                 if (m_isDisposed)
-                    throw new ObjectDisposedException("SerialQueue", "Cannot call DispatchSync on a disposed queue");
+                    throw new ObjectDisposedException(nameof(SerialQueue), "Cannot call DispatchAsync on a disposed queue");
 
                 m_asyncActions.Add(action);
+
                 if (m_asyncState == AsyncState.Idle)
                 {
                     // even though we don't hold m_schedulerLock when asyncActionsAreProcessing is set to false
@@ -154,9 +155,7 @@ namespace Dispatch
         protected virtual void ProcessAsync()
         {
             bool schedulerLockTaken = false;
-            if (s_queueStack == null)
-                s_queueStack = new Stack<IDispatchQueue>();
-            s_queueStack.Push(this);
+            s_queueStack.Value.Push(this);
             try
             {
                 Monitor.Enter(m_schedulerLock, ref schedulerLockTaken);
@@ -183,9 +182,7 @@ namespace Dispatch
                     }
                     catch (Exception exception)
                     {
-                        var handler = UnhandledException;
-                        if (handler != null)
-                            handler(this, new UnhandledExceptionEventArgs(exception));
+                        UnhandledException?.Invoke(this, new UnhandledExceptionEventArgs(exception));
                     }
 
                     // now re-acquire the lock for the next thing
@@ -200,7 +197,7 @@ namespace Dispatch
                 if (schedulerLockTaken)
                     Monitor.Exit(m_schedulerLock);
 
-                s_queueStack.Pop(); // technically we leak the queue stack threadlocal, but it's probably OK. Windows will free it when the thread exits
+                s_queueStack.Value.Pop(); // technically we leak the queue stack threadlocal, but it's probably OK. Windows will free it when the thread exits
             }
         }
 
@@ -210,10 +207,8 @@ namespace Dispatch
         /// <param name="action">The function to run.</param>
         public virtual void DispatchSync(Action action)
         {
-            if (s_queueStack == null)
-                s_queueStack = new Stack<IDispatchQueue>(); 
-            var prevStack = s_queueStack.ToArray(); // there might be a more optimal way of doing this, it seems to be fast enough
-            s_queueStack.Push(this);
+            var prevStack = s_queueStack.Value.ToArray(); // there might be a more optimal way of doing this, it seems to be fast enough
+            s_queueStack.Value.Push(this);
 
             bool schedulerLockTaken = false;
             try
@@ -222,7 +217,7 @@ namespace Dispatch
                 Debug.Assert(schedulerLockTaken);
 
                 if (m_isDisposed)
-                    throw new ObjectDisposedException("SerialQueue", "Cannot call DispatchSync on a disposed queue");
+                    throw new ObjectDisposedException(nameof(SerialQueue), "Cannot call DispatchSync on a disposed queue");
 
                 if(m_asyncState == AsyncState.Idle || prevStack.Contains(this)) // either queue is empty or it's a nested call
                 {
@@ -261,15 +256,14 @@ namespace Dispatch
                 if (schedulerLockTaken)
                     Monitor.Exit(m_schedulerLock);
 
-                s_queueStack.Pop(); // technically we leak the queue stack threadlocal, but it's probably OK. Windows will free it when the thread exits
+                s_queueStack.Value.Pop(); // technically we leak the queue stack threadlocal, but it's probably OK. Windows will free it when the thread exits
             }
         }
 
         /// <summary>Shuts down the queue. All unstarted async actions will be dropped,
         /// and any future attempts to call one of the Dispatch functions will throw an
         /// ObjectDisposedException</summary>
-        public void Dispose()
-        { Dispose(true); }
+        public void Dispose() => Dispose(true);
 
         /// <summary>Internal implementation of Dispose</summary>
         /// <remarks>We don't have a finalizer (and nor should we) but this method is just following the MS-recommended dispose pattern just in case someone wants to add one in a derived class</remarks>

@@ -20,6 +20,8 @@
 using System;
 using System.Threading.Tasks;
 
+#nullable enable
+
 namespace Dispatch
 {
     /// <summary>Represents a queue which we can use to post functions to</summary>
@@ -74,7 +76,9 @@ namespace Dispatch
         /// <returns>The return value of func</returns>
         public static T DispatchSync<T>(this IDispatchQueue queue, Func<T> func)
         {
-            T result = default(T);
+#pragma warning disable CS8653 // The value will be assigned by the lambda but the compiler can't infer that
+            T result = default;
+#pragma warning restore CS8653
             queue.DispatchSync(() => { result = func(); });
             return result;
         }
