@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2015 Orion Edwards
+﻿// Copyright (c) 2020 Orion Edwards
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
