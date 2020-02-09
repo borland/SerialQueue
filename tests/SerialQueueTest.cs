@@ -30,7 +30,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void DispatchSyncRunsNormally()
         {
-            var q = new SerialQueue(new InvalidThreadPool());
+            var q = new SerialQueue(new InvalidThreadPool(), SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchSync(() => {
                 hit.Add(1);
@@ -38,10 +38,14 @@ namespace Dispatch.SerialQueueTest
             CollectionAssert.AreEqual(new[] { 1 }, hit);
         }
 
+        // this is different to an Apple GCD queue. 
+        // It works because our queue is internally using a C# lock, which is recursive.
+        // On an idle queue, DispatchSync is more or less lock(queue) which allows recursion
+        // due to the fact that lock(queue) is recursive in C#.
         [TestMethod]
         public void NestedDispatchSyncDoesntDeadlock()
         {
-            var q = new SerialQueue(new InvalidThreadPool());
+            var q = new SerialQueue(new InvalidThreadPool(), SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchSync(() => {
                 hit.Add(1);
@@ -53,10 +57,14 @@ namespace Dispatch.SerialQueueTest
             CollectionAssert.AreEqual(new[] { 1, 2, 3 }, hit);
         }
 
+        // This is also different to an apple GCD queue. 
+        // Because DispatchSync{ DispatchSync {} } doesn't deadlock (see above)
+        // it would be really strange if DispatchAsync { DispatchSync {} }  DID deadlock, so
+        // we take the performance hit. Could put this ability behind a Feature in the future if need be
         [TestMethod]
         public void NestedDispatchSyncInsideDispatchAsyncDoesntDeadlock()
         {
-            var q = new SerialQueue(new TaskThreadPool());
+            var q = new SerialQueue(new TaskThreadPool(), SerialQueueFeatures.None);
             var hit = new List<int>();
             var mre = new ManualResetEvent(false);
             q.DispatchAsync(() => {
@@ -74,7 +82,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void DispatchSyncConcurrentWithAnotherDispatchAsyncWorksProperly()
         {
-            var q = new SerialQueue(new TaskThreadPool());
+            var q = new SerialQueue(new TaskThreadPool(), SerialQueueFeatures.None);
             var hit = new List<int>();
             var are = new AutoResetEvent(false);
             q.DispatchAsync(() => {
@@ -95,13 +103,13 @@ namespace Dispatch.SerialQueueTest
     [TestClass]
     public class SerialQueueTest_DispatchAsync
     {
-        MockThreadPool mockPool = new MockThreadPool(); // mstest creates a new instance for each test so we don't need things like BeforeEach
-        TaskThreadPool realPool = new TaskThreadPool();
+        readonly MockThreadPool mockPool = new MockThreadPool(); // mstest creates a new instance for each test so we don't need things like BeforeEach
+        readonly TaskThreadPool realPool = new TaskThreadPool();
 
         [TestMethod]
         public void DispatchAsyncQueuesToThreadpool()
         {
-            var q = new SerialQueue(mockPool);
+            var q = new SerialQueue(mockPool, SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchAsync(() => {
                 hit.Add(1);
@@ -117,7 +125,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void MultipleDispatchAsyncCallsGetProcessedByOneWorker()
         {
-            var q = new SerialQueue(mockPool);
+            var q = new SerialQueue(mockPool, SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchAsync(() => {
                 hit.Add(1);
@@ -136,7 +144,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void NestedDispatchAsyncCallsGetProcessedByOneWorker()
         {
-            var q = new SerialQueue(mockPool);
+            var q = new SerialQueue(mockPool, SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchAsync(() => {
                 hit.Add(1);
@@ -157,7 +165,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void DispatchAsyncCanBeCanceled()
         {
-            var q = new SerialQueue(mockPool);
+            var q = new SerialQueue(mockPool, SerialQueueFeatures.None);
             var hit = new List<int>();
             var d = q.DispatchAsync(() => hit.Add(1));
             Assert.AreEqual(1, mockPool.Actions.Count);
@@ -173,7 +181,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void DispatchAsyncCanBeSafelyCanceledAfterItsRun()
         {
-            var q = new SerialQueue(mockPool);
+            var q = new SerialQueue(mockPool, SerialQueueFeatures.None);
             var hit = new List<int>();
 
             var d = q.DispatchAsync(() => hit.Add(1));
@@ -191,7 +199,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void MultipleConcurrentDispatchAsyncsRunInSerialFollowedByDispatchSync()
         {
-            var q = new SerialQueue(realPool);
+            var q = new SerialQueue(realPool, SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchAsync(() => {
                 hit.Add(1);
@@ -225,12 +233,12 @@ namespace Dispatch.SerialQueueTest
     [TestClass]
     public class SerialQueueTest_DispatchAfter
     {
-        MockThreadPool mockPool = new MockThreadPool();
-        SerialQueue sq;
+        readonly MockThreadPool mockPool = new MockThreadPool();
+        readonly SerialQueue sq;
 
         public SerialQueueTest_DispatchAfter()
         {
-            sq = new SerialQueue(mockPool);
+            sq = new SerialQueue(mockPool, SerialQueueFeatures.None);
         }
 
         [TestMethod]
@@ -291,13 +299,12 @@ namespace Dispatch.SerialQueueTest
     [TestClass]
     public class SerialQueueTest_Disposal
     {
-        InvalidThreadPool invalidPool = new InvalidThreadPool();
-        MockThreadPool mockPool = new MockThreadPool();
+        readonly InvalidThreadPool invalidPool = new InvalidThreadPool();
 
         [TestMethod]
         public void CantCallDispatchSyncOnDisposedQueue()
         {
-            var sq = new SerialQueue(invalidPool);
+            var sq = new SerialQueue(invalidPool, SerialQueueFeatures.None);
             sq.Dispose();
             var hit = new List<int>();
 
@@ -309,7 +316,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void CantCallDispatchAsyncOnDisposedQueue()
         {
-            var sq = new SerialQueue(invalidPool);
+            var sq = new SerialQueue(invalidPool, SerialQueueFeatures.None);
             sq.Dispose();
             var hit = new List<int>();
 
@@ -321,7 +328,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void CantCallDispatchAfterOnDisposedQueue()
         {
-            var sq = new SerialQueue(invalidPool);
+            var sq = new SerialQueue(invalidPool, SerialQueueFeatures.None);
             sq.Dispose();
             var hit = new List<int>();
 
@@ -331,13 +338,13 @@ namespace Dispatch.SerialQueueTest
         }
     }
 
+    // Deliberately poisoned threadpool that will throw an exception if anyone tries to actually
+    // use it. Used to sanity check sync behaviour
     class InvalidThreadPool : IThreadPool
     {
-        public void QueueWorkItem(Action action)
-        { throw new NotImplementedException(); }
+        public void QueueWorkItem(Action action) => throw new NotImplementedException();
 
-        public IDisposable Schedule(TimeSpan dueTime, Action action)
-        { throw new NotImplementedException(); }
+        public IDisposable Schedule(TimeSpan dueTime, Action action) => throw new NotImplementedException();
     }
 
     class MockThreadPool : IThreadPool
@@ -351,8 +358,7 @@ namespace Dispatch.SerialQueueTest
         public Queue<Action> Actions = new Queue<Action>();
         public List<ScheduledAction> ScheduledActions = new List<ScheduledAction>();
 
-        public void QueueWorkItem(Action action)
-        { Actions.Enqueue(action); }
+        public void QueueWorkItem(Action action) => Actions.Enqueue(action);
 
         public void RunNextAction()
         {

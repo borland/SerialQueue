@@ -43,6 +43,7 @@ namespace Dispatch
             trackAllValues: false);
 
         readonly IThreadPool m_threadPool;
+        readonly SerialQueueFeatures m_features;
 
         // lock-order: We must never hold both these locks concurrently
         readonly object m_schedulerLock = new object(); // acquire this before adding any async/timer actions
@@ -55,13 +56,14 @@ namespace Dispatch
 
         /// <summary>Constructs a new SerialQueue backed by the given ThreadPool</summary>
         /// <param name="threadpool">The threadpool to queue async actions to</param>
-        public SerialQueue(IThreadPool threadpool)
+        public SerialQueue(IThreadPool threadpool, SerialQueueFeatures features)
         {
             m_threadPool = threadpool ?? throw new ArgumentNullException(nameof(threadpool));
+            m_features = features;
         }
 
         /// <summary>Constructs a new SerialQueue backed by the default TaskThreadPool</summary>
-        public SerialQueue() : this(TaskThreadPool.Default) { }
+        public SerialQueue(SerialQueueFeatures features = SerialQueueFeatures.All) : this(TaskThreadPool.Default, features) { }
 
         /// <summary>This event is raised whenever an asynchronous function (via DispatchAsync or DispatchAfter) 
         /// throws an unhandled exception</summary>
@@ -285,5 +287,17 @@ namespace Dispatch
             foreach (var t in timers)
                 t.Dispose();
         }
+    }
+
+    // Use these to turn on and off various features of the serial queue for performance reasons
+    [Flags]
+    public enum SerialQueueFeatures
+    {
+        None = 0,
+        // Note: if there is a need for it, we could put the Verify/Re-entrant DispatchSync behaviour behind a feature
+        // which could improve performance significantly
+        SynchronizationContext = 1,
+
+        All = SynchronizationContext
     }
 }
