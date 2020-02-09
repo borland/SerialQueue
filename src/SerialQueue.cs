@@ -43,7 +43,7 @@ namespace Dispatch
             trackAllValues: false);
 
         readonly IThreadPool m_threadPool;
-        readonly SerialQueueFeatures m_features;
+        readonly SynchronizationContext? m_syncContext;
 
         // lock-order: We must never hold both these locks concurrently
         readonly object m_schedulerLock = new object(); // acquire this before adding any async/timer actions
@@ -59,11 +59,17 @@ namespace Dispatch
         public SerialQueue(IThreadPool threadpool, SerialQueueFeatures features)
         {
             m_threadPool = threadpool ?? throw new ArgumentNullException(nameof(threadpool));
-            m_features = features;
+            Features = features;
+
+            if (features.HasFlag(SerialQueueFeatures.SynchronizationContext))
+                m_syncContext = new DispatchQueueSynchronizationContext(this);
         }
 
         /// <summary>Constructs a new SerialQueue backed by the default TaskThreadPool</summary>
         public SerialQueue(SerialQueueFeatures features = SerialQueueFeatures.All) : this(TaskThreadPool.Default, features) { }
+
+        /// <summary>Returns the enabled features this serial queue has</summary>
+        public SerialQueueFeatures Features { get; }
 
         /// <summary>This event is raised whenever an asynchronous function (via DispatchAsync or DispatchAfter) 
         /// throws an unhandled exception</summary>
@@ -179,11 +185,29 @@ namespace Dispatch
                     // process the action
                     try
                     {
-                        lock(m_executionLock) // we must lock here or a DispatchSync could run concurrently with the last thing in the queue
-                            action();
+                        lock (m_executionLock) // we must lock here or a DispatchSync could run concurrently with the last thing in the queue
+                        {
+                            SynchronizationContext? prevContext = null;
+                            if (m_syncContext != null)
+                            {
+                                prevContext = SynchronizationContext.Current;
+                                SynchronizationContext.SetSynchronizationContext(m_syncContext);
+                            }
+
+                            try
+                            {
+                                action();
+                            }
+                            finally // if we set the sync context, we must restore it (even if restoring to null)
+                            {
+                                if (m_syncContext != null)
+                                    SynchronizationContext.SetSynchronizationContext(prevContext);
+                            }
+                        }
                     }
                     catch (Exception exception)
                     {
+                        // need to execute this outside of lock scope
                         UnhandledException?.Invoke(this, new UnhandledExceptionEventArgs(exception));
                     }
 
@@ -287,6 +311,20 @@ namespace Dispatch
             foreach (var t in timers)
                 t.Dispose();
         }
+    }
+
+    public class DispatchQueueSynchronizationContext : SynchronizationContext
+    {
+        public DispatchQueueSynchronizationContext(IDispatchQueue queue)
+            => Queue = queue;
+
+        public IDispatchQueue Queue { get; }
+
+        public override void Post(SendOrPostCallback d, object state)
+            => Queue.DispatchAsync(() => d(state));
+
+        public override void Send(SendOrPostCallback d, object state)
+            => Queue.DispatchSync(() => d(state));
     }
 
     // Use these to turn on and off various features of the serial queue for performance reasons
