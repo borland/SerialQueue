@@ -5,6 +5,13 @@
     <AssemblyVersion>2.0.0.0</AssemblyVersion>
     <FileVersion>2.0.0.0</FileVersion>
     <LangVersion>8.0</LangVersion>
+    <Version>2.0.0</Version>
+    <Authors>Orion Edwards</Authors>
+    <Company />
+    <PackageLicenseUrl>https://raw.githubusercontent.com/borland/SerialQueue/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/borland/SerialQueue</PackageProjectUrl>
+    <Description>C# Implementation of a SerialQueue in the style of Apple's Grand Central Dispatch queues.</Description>
+    <Copyright>Orion Edwards 2020</Copyright>
   </PropertyGroup>
 
 </Project>
