@@ -112,8 +112,7 @@ namespace Dispatch
         /// This allows you await directly on a queue, which is handy for queue-jumping if you are already in the middle of an async method.
         /// </summary>
         /// <param name="queue">The queue to jump to with your await statement</param>
-        public static DispatchQueueAwaiter GetAwaiter(this IDispatchQueue queue)
-            => new DispatchQueueAwaiter(queue);
+        public static DispatchQueueAwaiter GetAwaiter(this IDispatchQueue queue) => new DispatchQueueAwaiter(queue);
 
         public struct DispatchQueueAwaiter : INotifyCompletion
         {
@@ -125,10 +124,9 @@ namespace Dispatch
                 IsCompleted = false;
             }
 
-            public bool IsCompleted { get; private set; }
+            public bool IsCompleted { get; }
 
-            public void OnCompleted(Action continuation)
-                => m_queue.DispatchAsync(continuation); // can't cancel here
+            public void OnCompleted(Action continuation) => m_queue.DispatchAsync(continuation); // can't cancel here
 
             public void GetResult() { }
 
