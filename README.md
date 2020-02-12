@@ -1,7 +1,7 @@
 # SerialQueue
 C# Implementation of a SerialQueue in the style of Apple's Grand Central Dispatch queues.
 
-Provided as a portable class library targeting .NET 4.5.1 / Windows 8.1 or newer.
+Provided as a Nuget package built for Net462 and NetStandard20
 
 ##What is a Serial Queue?
 
@@ -44,5 +44,47 @@ In the above example, both operations are guaranteed to execute in-order and gua
 Thus, the actions are thread-safe and easy to reason about.
 
 The actual execution of the functions is managed by the built-in .NET ThreadPool (the default implementation just uses `Task.Run`) so many thousands of queues will be backed by perhaps 8 or so underlying OS threads in the threadpool
+
+##Enhancements for .NET
+
+This serial queue supports async/await - i.e. if you are running within the context of a serial queue, then it will be captured across Async/Await
+
+    var q = new SerialQueue();
+    q.DispatchAsync(async () => {
+        // we are on the queue
+        
+        var response = await SomeNetworkRequest();
+
+        // we are still on the queue, it was captured by the await
+    });
+
+You can also await the queue itself directly in order to "jump" to it if you are in an existing async method
+
+    SerialQueue m_queue = new SerialQueue();
+
+    // imagine this is a WPF or winforms app
+    public void Button_Click()
+    {
+        // here we are on the UI main thread
+        var result = await DoBackgroundProcessing();
+
+        // and we are still on the UI thread because 'await DoBackgroundProcessing' captured the sync context.
+        MyTextBox.Text = result;
+	}
+
+    private async Task<string> DoBackgroundProcessing()
+    {
+        // at this point we are still on the UI main thread
+        
+        await m_queue;
+
+        // now we are OFF the main UI thread and onto the serial queue (behind the scenes we're on a threadpool thread)
+
+        var response = await SendNetworkRequest();
+
+        // still on the serial queue
+
+        return response;
+	}
 
 More Documentation is available on the [Github wiki](https://github.com/borland/SerialQueue/wiki)

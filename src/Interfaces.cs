@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 using System;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 #nullable enable
@@ -50,6 +51,9 @@ namespace Dispatch
         /// <summary>Checks whether the currently-executing function is
         /// on this queue, and throw an OperationInvalidException if it is not</summary>
         void VerifyQueue();
+
+        /// <summary>Returns the display-name of the queue (if one is set) for diagnostic purposes</summary>
+        string? Name { get; }
     }
     
     /// <summary>A serial queue needs a threadpool to run tasks on. You can provide your own implementation if you want to have a custom threadpool with it's own limits (e.g. no more than X concurrent threads)</summary>
@@ -102,6 +106,32 @@ namespace Dispatch
                 }
             });
             return tcs.Task;
+        }
+
+        /// <summary>
+        /// This allows you await directly on a queue, which is handy for queue-jumping if you are already in the middle of an async method.
+        /// </summary>
+        /// <param name="queue">The queue to jump to with your await statement</param>
+        public static DispatchQueueAwaiter GetAwaiter(this IDispatchQueue queue)
+            => new DispatchQueueAwaiter(queue);
+
+        public struct DispatchQueueAwaiter : INotifyCompletion
+        {
+            readonly IDispatchQueue m_queue;
+
+            public DispatchQueueAwaiter(IDispatchQueue queue)
+            {
+                m_queue = queue;
+                IsCompleted = false;
+            }
+
+            public bool IsCompleted { get; private set; }
+
+            public void OnCompleted(Action continuation)
+                => m_queue.DispatchAsync(continuation); // can't cancel here
+
+            public void GetResult() { }
+
         }
     }
 }

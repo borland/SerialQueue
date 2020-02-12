@@ -30,7 +30,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void DispatchSyncRunsNormally()
         {
-            var q = new SerialQueue(new InvalidThreadPool(), SerialQueueFeatures.None);
+            var q = new SerialQueue(new InvalidThreadPool(), null, SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchSync(() => {
                 hit.Add(1);
@@ -45,7 +45,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void NestedDispatchSyncDoesntDeadlock()
         {
-            var q = new SerialQueue(new InvalidThreadPool(), SerialQueueFeatures.None);
+            var q = new SerialQueue(new InvalidThreadPool(), null, SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchSync(() => {
                 hit.Add(1);
@@ -64,7 +64,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void NestedDispatchSyncInsideDispatchAsyncDoesntDeadlock()
         {
-            var q = new SerialQueue(new TaskThreadPool(), SerialQueueFeatures.None);
+            var q = new SerialQueue(new TaskThreadPool(), null, SerialQueueFeatures.None);
             var hit = new List<int>();
             var mre = new ManualResetEvent(false);
             q.DispatchAsync(() => {
@@ -82,7 +82,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void DispatchSyncConcurrentWithAnotherDispatchAsyncWorksProperly()
         {
-            var q = new SerialQueue(new TaskThreadPool(), SerialQueueFeatures.None);
+            var q = new SerialQueue(new TaskThreadPool(), null, SerialQueueFeatures.None);
             var hit = new List<int>();
             var are = new AutoResetEvent(false);
             q.DispatchAsync(() => {
@@ -109,7 +109,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void DispatchAsyncQueuesToThreadpool()
         {
-            var q = new SerialQueue(mockPool, SerialQueueFeatures.None);
+            var q = new SerialQueue(mockPool, null, SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchAsync(() => {
                 hit.Add(1);
@@ -125,7 +125,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void MultipleDispatchAsyncCallsGetProcessedByOneWorker()
         {
-            var q = new SerialQueue(mockPool, SerialQueueFeatures.None);
+            var q = new SerialQueue(mockPool, null, SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchAsync(() => {
                 hit.Add(1);
@@ -144,7 +144,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void NestedDispatchAsyncCallsGetProcessedByOneWorker()
         {
-            var q = new SerialQueue(mockPool, SerialQueueFeatures.None);
+            var q = new SerialQueue(mockPool, null, SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchAsync(() => {
                 hit.Add(1);
@@ -165,7 +165,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void DispatchAsyncCanBeCanceled()
         {
-            var q = new SerialQueue(mockPool, SerialQueueFeatures.None);
+            var q = new SerialQueue(mockPool, null, SerialQueueFeatures.None);
             var hit = new List<int>();
             var d = q.DispatchAsync(() => hit.Add(1));
             Assert.AreEqual(1, mockPool.Actions.Count);
@@ -181,7 +181,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void DispatchAsyncCanBeSafelyCanceledAfterItsRun()
         {
-            var q = new SerialQueue(mockPool, SerialQueueFeatures.None);
+            var q = new SerialQueue(mockPool, null, SerialQueueFeatures.None);
             var hit = new List<int>();
 
             var d = q.DispatchAsync(() => hit.Add(1));
@@ -199,7 +199,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void MultipleConcurrentDispatchAsyncsRunInSerialFollowedByDispatchSync()
         {
-            var q = new SerialQueue(realPool, SerialQueueFeatures.None);
+            var q = new SerialQueue(realPool, null, SerialQueueFeatures.None);
             var hit = new List<int>();
             q.DispatchAsync(() => {
                 hit.Add(1);
@@ -238,7 +238,7 @@ namespace Dispatch.SerialQueueTest
 
         public SerialQueueTest_DispatchAfter()
         {
-            sq = new SerialQueue(mockPool, SerialQueueFeatures.None);
+            sq = new SerialQueue(mockPool, null, SerialQueueFeatures.None);
         }
 
         [TestMethod]
@@ -304,7 +304,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void CantCallDispatchSyncOnDisposedQueue()
         {
-            var sq = new SerialQueue(invalidPool, SerialQueueFeatures.None);
+            var sq = new SerialQueue(invalidPool, null, SerialQueueFeatures.None);
             sq.Dispose();
             var hit = new List<int>();
 
@@ -316,7 +316,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void CantCallDispatchAsyncOnDisposedQueue()
         {
-            var sq = new SerialQueue(invalidPool, SerialQueueFeatures.None);
+            var sq = new SerialQueue(invalidPool, null, SerialQueueFeatures.None);
             sq.Dispose();
             var hit = new List<int>();
 
@@ -328,13 +328,91 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void CantCallDispatchAfterOnDisposedQueue()
         {
-            var sq = new SerialQueue(invalidPool, SerialQueueFeatures.None);
+            var sq = new SerialQueue(invalidPool, null, SerialQueueFeatures.None);
             sq.Dispose();
             var hit = new List<int>();
 
             AssertEx.Throws<ObjectDisposedException>(() => {
                 sq.DispatchAfter(TimeSpan.FromMilliseconds(100), () => hit.Add(1));
             });
+        }
+    }
+
+    [TestClass]
+    public class SerialQueueTest_NameAndCurrent
+    {
+        readonly MockThreadPool mockPool = new MockThreadPool();
+        readonly InvalidThreadPool invalidPool = new InvalidThreadPool();
+
+        [TestMethod]
+        public void CanSetAName()
+        {
+            var defq = new SerialQueue();
+            Assert.IsNull(defq.Name);
+
+            var sq = new SerialQueue(invalidPool, "q1");
+            Assert.AreEqual("q1", sq.Name);
+        }
+
+        [TestMethod]
+        public void CurrentQueueReturnsNullWhenNotOnQueue()
+        {
+            var sq = new SerialQueue(invalidPool, "q1");
+
+            Assert.IsNull(SerialQueue.Current);
+        }
+
+        [TestMethod]
+        public void CurrentQueueReturnsQueueInDispatchSync()
+        {
+            var sq = new SerialQueue(invalidPool, "q1");
+
+            Assert.IsNull(SerialQueue.Current);
+
+            sq.DispatchSync(() => {
+                Assert.AreSame(sq, SerialQueue.Current);
+            });
+
+            Assert.IsNull(SerialQueue.Current);
+        }
+
+        [TestMethod]
+        public void CurrentQueueReturnsTopmostQueueInDispatchSync()
+        {
+            var q1 = new SerialQueue(invalidPool, "q1");
+            var q2 = new SerialQueue(invalidPool, "q2");
+
+            Assert.IsNull(SerialQueue.Current);
+
+            q1.DispatchSync(() => {
+                q2.DispatchSync(() => {
+                    Assert.AreSame(q2, SerialQueue.Current);
+                });
+            });
+
+            Assert.IsNull(SerialQueue.Current);
+        }
+
+        [TestMethod]
+        public void CurrentQueueReturnsQueueInDispatchAsync()
+        {
+            var sq = new SerialQueue(mockPool, "q1");
+
+            Assert.IsNull(SerialQueue.Current);
+
+            var mre = new ManualResetEvent(false);
+
+            var captured = new List<SerialQueue>();
+            sq.DispatchAsync(() => {
+                captured.Add(SerialQueue.Current);
+            });
+
+            mockPool.RunNextAction();
+
+            Assert.AreEqual(1, captured.Count);
+            Assert.AreSame(captured[0], sq);
+
+            Assert.IsNull(SerialQueue.Current);
         }
     }
 

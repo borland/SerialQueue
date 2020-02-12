@@ -30,7 +30,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void ChainOfAwaitsFollowsTheQueue()
         {
-            var q = new SerialQueue(SerialQueueFeatures.SynchronizationContext);
+            var q = new SerialQueue(null, SerialQueueFeatures.SynchronizationContext);
 
             var hits = new List<int>();
 
@@ -58,7 +58,7 @@ namespace Dispatch.SerialQueueTest
         [TestMethod]
         public void ChainOfAwaitsDoesNotFollowQueueIfFeatureIsOff()
         {
-            var q = new SerialQueue(SerialQueueFeatures.None);
+            var q = new SerialQueue(null, SerialQueueFeatures.None);
 
             var hits = new List<int>();
 
@@ -75,7 +75,8 @@ namespace Dispatch.SerialQueueTest
                     q.VerifyQueue();
                     hits.Add(2);
 
-                } catch(InvalidOperationException e) when(e.Message == "On the wrong queue")
+                }
+                catch (InvalidOperationException e) when (e.Message == "On the wrong queue")
                 {
                     hits.Add(99); // indicate this blew up
                 }
@@ -84,6 +85,59 @@ namespace Dispatch.SerialQueueTest
 
             Assert.IsTrue(done.WaitOne(500));
             CollectionAssert.AreEqual(new[] { 1, 99 }, hits);
+        }
+    }
+
+    [TestClass]
+    public class SerialQueueAwaiterTest
+    {
+        [TestMethod]
+        public async Task CanAwaitTheQueueItself()
+        {
+            var q = new SerialQueue("q1", SerialQueueFeatures.SynchronizationContext);
+
+            Assert.IsNull(SerialQueue.Current);
+
+            await q;
+
+            Assert.AreSame(q, SerialQueue.Current);
+        }
+
+        [TestMethod]
+        public async Task CanAwaitAcrossManyQueues()
+        {
+            var q1 = new SerialQueue("q1", SerialQueueFeatures.SynchronizationContext);
+            var q2 = new SerialQueue("q2", SerialQueueFeatures.SynchronizationContext);
+            var q3 = new SerialQueue("q3", SerialQueueFeatures.SynchronizationContext);
+
+            Assert.IsNull(SerialQueue.Current);
+
+            await q1;
+
+            Assert.AreSame(q1, SerialQueue.Current);
+
+            await q2;
+
+            Assert.AreSame(q2, SerialQueue.Current);
+
+            await q3;
+
+            Assert.AreSame(q3, SerialQueue.Current);
+        }
+
+        [TestMethod]
+        public async Task AwaitWorksEvenIfExplicitSyncContextIsSet()
+        {
+            var qFalse = new SerialQueue("q1", SerialQueueFeatures.SynchronizationContext);
+            var q = new SerialQueue("q2", SerialQueueFeatures.SynchronizationContext);
+            
+            Assert.IsNull(SerialQueue.Current);
+
+            SynchronizationContext.SetSynchronizationContext(new DispatchQueueSynchronizationContext(qFalse));
+
+            await q;
+
+            Assert.AreSame(q, SerialQueue.Current);
         }
     }
 }
