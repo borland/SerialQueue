@@ -38,8 +38,8 @@ namespace Dispatch
             Processing
         }
 
-        static readonly ThreadLocal<Stack<IDispatchQueue>> s_queueStack = new ThreadLocal<Stack<IDispatchQueue>>(
-            valueFactory: () => new Stack<IDispatchQueue>(), 
+        static readonly ThreadLocal<Stack<SerialQueue>> s_queueStack = new ThreadLocal<Stack<SerialQueue>>(
+            valueFactory: () => new Stack<SerialQueue>(), 
             trackAllValues: false);
 
         readonly IThreadPool m_threadPool;
@@ -56,9 +56,10 @@ namespace Dispatch
 
         /// <summary>Constructs a new SerialQueue backed by the given ThreadPool</summary>
         /// <param name="threadpool">The threadpool to queue async actions to</param>
-        public SerialQueue(IThreadPool threadpool, SerialQueueFeatures features)
+        public SerialQueue(IThreadPool threadpool, string? name = null, SerialQueueFeatures features = SerialQueueFeatures.All)
         {
             m_threadPool = threadpool ?? throw new ArgumentNullException(nameof(threadpool));
+            Name = name;
             Features = features;
 
             if (features.HasFlag(SerialQueueFeatures.SynchronizationContext))
@@ -66,7 +67,10 @@ namespace Dispatch
         }
 
         /// <summary>Constructs a new SerialQueue backed by the default TaskThreadPool</summary>
-        public SerialQueue(SerialQueueFeatures features = SerialQueueFeatures.All) : this(TaskThreadPool.Default, features) { }
+        public SerialQueue(string? name = null, SerialQueueFeatures features = SerialQueueFeatures.All) : this(TaskThreadPool.Default, name, features) { }
+
+        /// <summary>Returns the name (if one is set)</summary>
+        public string? Name { get; }
 
         /// <summary>Returns the enabled features this serial queue has</summary>
         public SerialQueueFeatures Features { get; }
@@ -75,11 +79,15 @@ namespace Dispatch
         /// throws an unhandled exception</summary>
         public event EventHandler<UnhandledExceptionEventArgs>? UnhandledException;
 
+        /// <summary>Returns the topmost queue that we are currently executing on, or null if we're not on any queue.
+        /// Note this only works for serial queues specifically, it doesn't generalize to any IDispatchQueue</summary>
+        public static SerialQueue? Current => s_queueStack.Value.Count > 0 ? s_queueStack.Value.Peek() : null;
+
         /// <summary>Checks whether the currently-executing function is
         /// on this queue, and throw an OperationInvalidException if it is not</summary>
         public void VerifyQueue()
         {
-            if (s_queueStack == null || !s_queueStack.Value.Contains(this))
+            if (!s_queueStack.Value.Contains(this))
                 throw new InvalidOperationException("On the wrong queue");
         }
 
